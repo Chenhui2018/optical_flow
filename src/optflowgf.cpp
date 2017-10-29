@@ -118,6 +118,7 @@ FarnebackPrepareGaussian(int n, double sigma, float *g, float *xg, float *xxg,
 static void
 FarnebackPolyExp( const Mat& src, Mat& dst, int n, double sigma )
 {
+	// src resize后的图像，dst输出，n检索范围，sigma高斯标准差
     int k, x, y;
 
     CV_Assert( src.type() == CV_32FC1 );
@@ -226,7 +227,7 @@ FarnebackUpdateMatrices( const Mat& _R0, const Mat& _R1, const Mat& _flow, Mat& 
     const float* R1 = _R1.ptr<float>();
     size_t step1 = _R1.step/sizeof(R1[0]);
 
-    matM.create(height, width, CV_32FC(5));
+    matM.create(height, width, CV_32FC(5)); // 建立5通道的Mat
 
     for( y = _y0; y < _y1; y++ )
     {
@@ -633,13 +634,13 @@ public:
     virtual void calc(InputArray I0, InputArray I1, InputOutputArray flow);
 
 private:
-    int numLevels_;
-    double pyrScale_;
+    int numLevels_; // 金字塔层数
+    double pyrScale_; // 每层金字塔的缩放倍数
     bool fastPyramids_;
     int winSize_;
     int numIters_;
-    int polyN_;
-    double polySigma_;
+    int polyN_; // 像素点的检索范围
+    double polySigma_; // 用于高斯smooth的标准差
     int flags_;
 
 #ifdef HAVE_OPENCL
@@ -1112,13 +1113,13 @@ void FarnebackOpticalFlowImpl::calc(InputArray _prev0, InputArray _next0,
     //           calc_ocl(_prev0,_next0,_flow0))
 
     Mat prev0 = _prev0.getMat(), next0 = _next0.getMat();
-    const int min_size = 32;
+    const int min_size = 32; // 缩放后的金字塔的最小大小
     const Mat* img[2] = { &prev0, &next0 };
 
     int i, k;
     double scale;
     Mat prevFlow, flow, fimg;
-    int levels = numLevels_;
+    int levels = numLevels_; // 金字塔层数
 
     CV_Assert( prev0.size() == next0.size() && prev0.channels() == next0.channels() &&
                prev0.channels() == 1 && pyrScale_ < 1 );
@@ -1127,20 +1128,22 @@ void FarnebackOpticalFlowImpl::calc(InputArray _prev0, InputArray _next0,
 
     for( k = 0, scale = 1; k < levels; k++ )
     {
-        scale *= pyrScale_;
+        scale *= pyrScale_; // pyrScale_ 每层金子塔的缩放倍数
         if( prev0.cols*scale < min_size || prev0.rows*scale < min_size )
             break;
     }
 
-    levels = k;
+    levels = k; // 大小满足要求的金字塔层数
 
+	// 对每层的金字塔进行遍历
     for( k = levels; k >= 0; k-- )
     {
+		// 获得当前的金字塔缩放系数
         for( i = 0, scale = 1; i < k; i++ )
             scale *= pyrScale_;
 
         double sigma = (1./scale-1)*0.5;
-        int smooth_sz = cvRound(sigma*5)|1;
+        int smooth_sz = cvRound(sigma*5)|1; // 按位或，不小于自身的最大奇数
         smooth_sz = std::max(smooth_sz, 3);
 
         int width = cvRound(prev0.cols*scale);
@@ -1153,24 +1156,25 @@ void FarnebackOpticalFlowImpl::calc(InputArray _prev0, InputArray _next0,
 
         if( prevFlow.empty() )
         {
+			// 初始化第一帧
             if( flags_ & OPTFLOW_USE_INITIAL_FLOW )
             {
                 resize( flow0, flow, Size(width, height), 0, 0, INTER_AREA );
                 flow *= scale;
             }
             else
-                flow = Mat::zeros( height, width, CV_32FC2 );
+                flow = Mat::zeros( height, width, CV_32FC2 ); // main 输入flag=0，所以执行这里
         }
         else
         {
             resize( prevFlow, flow, Size(width, height), 0, 0, INTER_LINEAR );
-            flow *= 1./pyrScale_;
+            flow *= 1./pyrScale_; // ？？
         }
 
         Mat R[2], I, M;
         for( i = 0; i < 2; i++ )
         {
-            img[i]->convertTo(fimg, CV_32F);
+            img[i]->convertTo(fimg, CV_32F); 
             GaussianBlur(fimg, fimg, Size(smooth_sz, smooth_sz), sigma, sigma);
             resize( fimg, I, Size(width, height), INTER_LINEAR );
             FarnebackPolyExp( I, R[i], polyN_, polySigma_ );
